@@ -25,7 +25,7 @@ Works on `.mermaid` and `.mmd` files. The whole buffer is treated as the diagram
 
 ```lua
 {
-  "joaodonghia/mermaid-live.nvim",
+  "jdonghia/mermaid-live.nvim",
   ft = { "mermaid" },
   cmd = { "MermaidView", "MermaidStop", "MermaidOpen" },
   opts = {},
@@ -39,7 +39,7 @@ Works on `.mermaid` and `.mmd` files. The whole buffer is treated as the diagram
 
 ```lua
 use {
-  "joaodonghia/mermaid-live.nvim",
+  "jdonghia/mermaid-live.nvim",
   config = function() require("mermaid-live").setup({}) end,
 }
 ```
