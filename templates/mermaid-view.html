@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>mermaid-live</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1e1e1e; overflow: hidden; transition: background .15s; }
+      body.light { background: #ffffff; }
+      #wrap { position: fixed; inset: 0; }
+      #diag { width: 100%; height: 100%; }
+      #diag svg { width: 100%; height: 100%; display: block; }
+      .hint {
+        position: fixed; bottom: 10px; right: 14px;
+        color: #888; font: 12px ui-monospace, monospace;
+        background: rgba(0,0,0,.4); padding: 4px 8px; border-radius: 4px;
+        pointer-events: none;
+      }
+      .err {
+        position: fixed; top: 10px; left: 10px; right: 10px;
+        color: #f88; font: 13px ui-monospace, monospace; white-space: pre-wrap;
+        background: rgba(0,0,0,.6); padding: 8px 10px; border-radius: 4px;
+        pointer-events: none; z-index: 10;
+      }
+      .dot {
+        position: fixed; top: 10px; right: 10px; width: 8px; height: 8px;
+        border-radius: 50%; background: #4c4; transition: background .2s;
+      }
+      .dot.stale { background: #c44; }
+      .theme-btn {
+        position: fixed; top: 8px; left: 10px;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: rgba(128,128,128,.25); color: #ccc;
+        border: none; cursor: pointer; font-size: 16px; line-height: 28px;
+        padding: 0; text-align: center;
+      }
+      body.light .theme-btn { color: #444; }
+      .theme-btn:hover { background: rgba(128,128,128,.45); }
+    </style>
+    <script src="__SVG_PAN_ZOOM_CDN__"></script>
+  </head>
+  <body>
+    <div id="wrap"><div id="diag" class="mermaid"></div></div>
+    <div class="hint">scroll = zoom · drag = pan · r = reset · f = fit · t = theme</div>
+    <div id="dot" class="dot"></div>
+    <button id="themeBtn" class="theme-btn" title="Toggle theme (t)">◐</button>
+    <script type="module">
+      import mermaid from '__MERMAID_CDN__';
+      try {
+        const elkLayouts = (await import('__MERMAID_ELK_CDN__')).default;
+        mermaid.registerLayoutLoaders(elkLayouts);
+      } catch (e) {
+        console.warn('mermaid-live: ELK layout loader failed', e);
+      }
+
+      const diag = document.getElementById('diag');
+      const dot = document.getElementById('dot');
+      const systemMql = window.matchMedia('(prefers-color-scheme: dark)');
+      let lastV = -1;
+      let lastCode = '';
+      let currentTheme = null;
+      let systemListener = null;
+      let pz = null;
+
+      function resolveTheme(theme) {
+        if (theme === 'auto') return systemMql.matches ? 'dark' : 'default';
+        return theme;
+      }
+
+      function reinitMermaid(resolved) {
+        document.body.classList.toggle('light', resolved !== 'dark');
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: resolved,
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: false },
+          mindmap: { useMaxWidth: false },
+        });
+        if (lastCode) render(lastCode);
+      }
+
+      function applyTheme(theme) {
+        if (theme === currentTheme) return false;
+        currentTheme = theme;
+        if (systemListener) {
+          systemMql.removeEventListener('change', systemListener);
+          systemListener = null;
+        }
+        if (theme === 'auto') {
+          systemListener = () => reinitMermaid(resolveTheme('auto'));
+          systemMql.addEventListener('change', systemListener);
+        }
+        reinitMermaid(resolveTheme(theme));
+        return true;
+      }
+
+      function showErr(msg) {
+        let el = document.getElementById('err');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'err';
+          el.className = 'err';
+          document.body.appendChild(el);
+        }
+        el.textContent = 'mermaid error:\n' + msg;
+      }
+      function hideErr() {
+        const el = document.getElementById('err');
+        if (el) el.remove();
+      }
+
+      async function render(code) {
+        lastCode = code;
+        const prev = pz ? { zoom: pz.getZoom(), pan: pz.getPan() } : null;
+        if (pz) { try { pz.destroy(); } catch (e) {} pz = null; }
+        diag.innerHTML = '';
+        diag.removeAttribute('data-processed');
+        diag.textContent = code;
+        try {
+          await mermaid.run({ nodes: [diag] });
+        } catch (e) {
+          showErr(e && e.message ? e.message : String(e));
+          return;
+        }
+        hideErr();
+        const svg = diag.querySelector('svg');
+        if (!svg) return;
+        svg.removeAttribute('height');
+        svg.removeAttribute('width');
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.maxWidth = 'none';
+        pz = svgPanZoom(svg, {
+          controlIconsEnabled: false,
+          zoomScaleSensitivity: 0.4,
+          minZoom: 0.05,
+          maxZoom: 100,
+          fit: !prev,
+          center: !prev,
+        });
+        if (prev) { pz.zoom(prev.zoom); pz.pan(prev.pan); }
+      }
+
+      async function poll() {
+        try {
+          const r = await fetch('/code', { cache: 'no-store' });
+          const t = await r.text();
+          const nl1 = t.indexOf('\n');
+          const nl2 = t.indexOf('\n', nl1 + 1);
+          const v = parseInt(t.slice(0, nl1), 10);
+          const theme = t.slice(nl1 + 1, nl2);
+          const code = t.slice(nl2 + 1);
+          dot.classList.remove('stale');
+          applyTheme(theme);
+          if (v !== lastV) {
+            lastV = v;
+            await render(code);
+          }
+        } catch (e) {
+          dot.classList.add('stale');
+        }
+        setTimeout(poll, __POLL_MS__);
+      }
+
+      poll();
+
+      function toggleTheme() {
+        const cycle = { auto: 'dark', dark: 'default', default: 'auto' };
+        const next = cycle[currentTheme] || 'auto';
+        applyTheme(next);
+        fetch('/theme/' + next, { cache: 'no-store' }).catch(() => {});
+      }
+
+      document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+
+      window.addEventListener('resize', () => { if (pz) { pz.resize(); pz.fit(); pz.center(); } });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 't') { toggleTheme(); return; }
+        if (!pz) return;
+        if (e.key === 'r') { pz.resetZoom(); pz.center(); }
+        if (e.key === 'f') { pz.fit(); pz.center(); }
+      });
+    </script>
+  </body>
+</html>

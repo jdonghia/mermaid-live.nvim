@@ -1,0 +1,106 @@
+*mermaid-live.txt*  Live preview for Mermaid diagrams in the browser
+
+==============================================================================
+CONTENTS                                                  *mermaid-live-contents*
+
+  1. Introduction .......................... |mermaid-live-introduction|
+  2. Requirements .......................... |mermaid-live-requirements|
+  3. Commands .............................. |mermaid-live-commands|
+  4. Configuration ......................... |mermaid-live-config|
+  5. Browser controls ...................... |mermaid-live-browser|
+  6. API ................................... |mermaid-live-api|
+
+==============================================================================
+1. INTRODUCTION                                       *mermaid-live-introduction*
+
+mermaid-live.nvim renders the current buffer as a Mermaid diagram in your
+browser, with an infinite pan/zoom canvas, and re-renders on every edit. It
+operates on whole-buffer `.mermaid` / `.mmd` files (no fenced code blocks).
+
+==============================================================================
+2. REQUIREMENTS                                       *mermaid-live-requirements*
+
+  - Neovim 0.10+ (uses |vim.uv|)
+  - A browser
+  - Internet on first open (CDN-loaded mermaid + svg-pan-zoom by default)
+
+==============================================================================
+3. COMMANDS                                               *mermaid-live-commands*
+
+                                                                  *:MermaidView*
+:MermaidView      Start the server and open the browser. Buffer filetype must
+                  be in |mermaid-live-config|.filetypes.
+
+                                                                 *:MermaidServe*
+:MermaidServe     Start the server for the current buffer without opening the
+                  browser. Useful when a tab is already open or you want to
+                  drive the URL yourself.
+
+                                                                  *:MermaidStop*
+:MermaidStop      Tear down the HTTP server, autocmds, and internal state.
+
+                                                                  *:MermaidOpen*
+:MermaidOpen      Reopen the browser at the running preview URL.
+
+                                                                 *:MermaidTheme*
+:MermaidTheme {name}
+                  Set preview theme. Valid: auto, default, dark, forest,
+                  neutral, base. "auto" follows the OS color scheme
+                  (prefers-color-scheme) and re-renders when it changes.
+
+                                                           *:MermaidThemeToggle*
+:MermaidThemeToggle
+                  Cycle: auto -> dark -> default -> auto.
+
+                                                               *:MermaidCleanup*
+:MermaidCleanup   Scan localhost listening TCP ports (via lsof) and shut down
+                  any mermaid-live servers that respond to /__id, except this
+                  nvim's own server. Useful if older sessions left random
+                  ports occupied.
+
+==============================================================================
+4. CONFIGURATION                                            *mermaid-live-config*
+
+Call setup() to override defaults: >
+
+    require("mermaid-live").setup({
+      filetypes = { "mermaid" },
+      poll_interval_ms = 350,
+      theme = "auto",        -- follows prefers-color-scheme when set to auto
+      port = 8765,           -- fixed; set to 0 for a random free port
+      open_browser = true,
+      open_cmd = nil,        -- list or function(url) to override browser launch
+      auto_stop_on_leave = true,
+      mermaid_cdn = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js",
+      svg_pan_zoom_cdn = "https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js",
+    })
+<
+
+==============================================================================
+5. BROWSER CONTROLS                                        *mermaid-live-browser*
+
+  scroll   zoom
+  drag     pan
+  r        reset zoom
+  f        fit to viewport
+  t        cycle theme: auto -> dark -> default (also a ◐ button in the
+           top-left). The change is sent to the server so Neovim stays in
+           sync.
+
+A small dot in the top-right turns red when the browser cannot reach the
+server (e.g. after |:MermaidStop|).
+
+==============================================================================
+6. API                                                         *mermaid-live-api*
+
+    require("mermaid-live").start()         Same as |:MermaidView|.
+    require("mermaid-live").serve()         Same as |:MermaidServe|.
+    require("mermaid-live").stop()          Same as |:MermaidStop|.
+    require("mermaid-live").open()          Same as |:MermaidOpen|.
+    require("mermaid-live").set_theme(s)    Same as |:MermaidTheme|.
+    require("mermaid-live").toggle_theme()  Same as |:MermaidThemeToggle|.
+    require("mermaid-live").get_theme()     Returns current theme string.
+    require("mermaid-live").url()           Returns preview URL or nil.
+    require("mermaid-live").is_running()    Returns true if server is up.
+
+ vim:tw=78:ts=8:ft=help:norl:
